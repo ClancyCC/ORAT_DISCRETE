@@ -306,6 +306,54 @@ class Actor(nn.Module):
         return torch.tanh(mu).detach().cpu()
 
 
+class DiscreteActor(nn.Module):
+    """Actor for discrete action spaces (Categorical policy with Gumbel-Softmax)."""
+
+    def __init__(self, state_size, action_size, hidden_size=32, init_w=3e-3):
+        """Initialize parameters and build model.
+        Params
+        ======
+            state_size (int): Dimension of each state
+            action_size (int): Number of discrete actions
+            hidden_size (int): Number of nodes in hidden layers
+        """
+        super(DiscreteActor, self).__init__()
+        self.fc1 = nn.Linear(state_size, hidden_size)
+        self.fc2 = nn.Linear(hidden_size, hidden_size)
+        self.logits = nn.Linear(hidden_size, action_size)
+
+    def forward(self, state):
+        x = F.relu(self.fc1(state))
+        x = F.relu(self.fc2(x))
+        return self.logits(x)
+
+    def evaluate(self, state, epsilon=1e-6, tau=1.0):
+        """
+        Returns a relaxed one-hot action (via Gumbel-Softmax) and log-probability.
+        """
+        logits = self.forward(state)  # [batch, action_size]
+        # Gumbel-Softmax for differentiable sampling
+        action_relaxed = F.gumbel_softmax(logits, tau=tau, hard=False)  # [batch, action_size]
+        # Compute exact log-prob from Categorical distribution
+        probs = F.softmax(logits, dim=-1)
+        m = torch.distributions.Categorical(probs)
+        action_idx = torch.argmax(action_relaxed, dim=-1)
+        log_prob = m.log_prob(action_idx).unsqueeze(-1)
+        return action_relaxed, log_prob
+
+    def get_action(self, state):
+        """Sample action index from the categorical policy."""
+        logits = self.forward(state)
+        probs = F.softmax(logits, dim=-1)
+        m = torch.distributions.Categorical(probs)
+        return m.sample().detach().cpu()
+
+    def get_det_action(self, state):
+        """Greedy action (argmax)."""
+        logits = self.forward(state)
+        return torch.argmax(logits, dim=-1).detach().cpu()
+
+
 class Critic(nn.Module):
     """Critic (Value) Model."""
 

@@ -160,6 +160,7 @@ class CQLSAC_CNN_LSTM(nn.Module):
         normalized_data = (2 * normalized_data - 1).astype(np.float32)
         actions = torch.from_numpy(normalized_data).to(self.device)
 
+        
         #--------------------------------Image processing------------------------#
 
         states = self.CNN_LSTM(states)

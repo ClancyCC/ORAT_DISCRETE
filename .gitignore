@@ -3,3 +3,6 @@ trained_models/
 
 __pycache__/
 .vscode/
+test
+dataset_new/
+trained_models_discrete/

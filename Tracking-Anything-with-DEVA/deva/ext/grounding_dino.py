@@ -24,10 +24,11 @@ from deva.inference.object_info import ObjectInfo
 def get_grounding_dino_model(config: Dict, device: str) -> (GroundingDINOModel, SamPredictor):
     GROUNDING_DINO_CONFIG_PATH = config['GROUNDING_DINO_CONFIG_PATH']
     GROUNDING_DINO_CHECKPOINT_PATH = config['GROUNDING_DINO_CHECKPOINT_PATH']
+    detection_device = config.get('detection_device', device)
 
     gd_model = GroundingDINOModel(model_config_path=GROUNDING_DINO_CONFIG_PATH,
                                   model_checkpoint_path=GROUNDING_DINO_CHECKPOINT_PATH,
-                                  device=device)
+                                  device=detection_device)
 
     # Building SAM Model and SAM Predictor
     variant = config['sam_variant'].lower()
@@ -38,14 +39,14 @@ def get_grounding_dino_model(config: Dict, device: str) -> (GroundingDINOModel, 
         checkpoint = torch.load(MOBILE_SAM_CHECKPOINT_PATH)
         mobile_sam = setup_mobile_sam()
         mobile_sam.load_state_dict(checkpoint, strict=True)
-        mobile_sam.to(device=device)
+        mobile_sam.to(device=detection_device)
         sam = SamPredictor(mobile_sam)
     elif variant == 'original':
         SAM_ENCODER_VERSION = config['SAM_ENCODER_VERSION']
         SAM_CHECKPOINT_PATH = config['SAM_CHECKPOINT_PATH']
 
         sam = sam_model_registry[SAM_ENCODER_VERSION](checkpoint=SAM_CHECKPOINT_PATH).to(
-            device=device)
+            device=detection_device)
         sam = SamPredictor(sam)
 
     return gd_model, sam
@@ -99,7 +100,8 @@ def segment_with_text(config: Dict, gd_model: GroundingDINOModel, sam: SamPredic
     else:
         new_h, new_w = h, w
 
-    output_mask = torch.zeros((new_h, new_w), dtype=torch.int64, device=gd_model.device)
+    output_device = config.get('deva_device', gd_model.device)
+    output_mask = torch.zeros((new_h, new_w), dtype=torch.int64, device=output_device)
     curr_id = 1
     segments_info = []
 
@@ -108,7 +110,7 @@ def segment_with_text(config: Dict, gd_model: GroundingDINOModel, sam: SamPredic
         mask = detections.mask[i]
         confidence = detections.confidence[i]
         class_id = detections.class_id[i]
-        mask = torch.from_numpy(mask.astype(np.float32))
+        mask = torch.from_numpy(mask.astype(np.float32)).to(output_device)
         mask = F.interpolate(mask.unsqueeze(0).unsqueeze(0), (new_h, new_w), mode='bilinear')[0, 0]
         mask = (mask > 0.5).float()
 

@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -16,7 +17,15 @@ def get_input_frame_for_deva(image_np: np.ndarray, min_side: int) -> torch.Tenso
         new_h, new_w = int(h * scale), int(w * scale)
         image = image.unsqueeze(0)
         image = F.interpolate(image, (new_h, new_w), mode='bilinear', align_corners=False)[0]
-    return image.cuda()
+    if torch.cuda.is_available():
+        visible_devices = os.environ.get("CUDA_VISIBLE_DEVICES", "").strip()
+        if visible_devices:
+            return image.to("cuda:0")
+        deva_cuda_device = os.environ.get("DEVA_CUDA_DEVICE")
+        if deva_cuda_device:
+            return image.to(deva_cuda_device)
+        return image.to("cuda")
+    return image
 
 
 @torch.inference_mode()
